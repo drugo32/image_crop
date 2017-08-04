@@ -1,0 +1,78 @@
+<?php
+
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+ /**
+   * Implements hook_theme().
+   */
+  function imagefield_crop_theme() {
+    return [
+      // Theme functions in image.module.
+      'imagefield_crop_widget' => [
+        // HTML 4 and XHTML 1.0 always require an alt attribute. The HTML 5 draft
+        // allows the alt attribute to be omitted in some cases. Therefore,
+        // default the alt attribute to an empty string, but allow code using
+        // '#theme' => 'field_example_style' to pass explicit NULL for it to be omitted.
+        // Usually, neither omission nor an empty string satisfies accessibility
+        // requirements, so it is strongly encouraged for code using '#theme' =>
+        // 'field_example_style' to pass a meaningful value for the alt variable.
+        // - http://www.w3.org/TR/REC-html40/struct/objects.html#h-13.8
+        // - http://www.w3.org/TR/xhtml1/dtds.html
+        // - http://dev.w3.org/html5/spec/Overview.html#alt
+        // The title attribute is optional in all cases, so it is omitted by
+        // default.
+        'variables' => [
+          'style_name' => NULL,
+          'uri' => NULL,
+          'width' => NULL,
+          'height' => NULL,
+          'alt' => '',
+          'title' => NULL,
+          'attributes' => [],
+          'cropbox' => [],
+          'preview' => [],
+          'render element' => 'element',
+        ],
+      ],
+      'imagefield_crop_preview' => [
+        'render element' => 'element',
+        'style_name' => NULL,
+        'uri' => NULL,
+        'width' => NULL,
+        'height' => NULL,
+        'alt' => '',
+        'title' => NULL,
+        'attributes' => [],
+      ],
+      /*
+      // Theme functions in image.admin.inc.
+      'field_example_preview' => [
+        'variables' => ['style' => NULL],
+        'file' => 'image.admin.inc',
+      ],
+      */
+    ];
+  }
+
+
+  function template_preprocess_imagefield_crop_preview(&$variables) {
+    $image = [
+     '#theme' => 'image',
+     '#width' =>  $variables['element']['#width'],
+     '#height' => $variables['element']['#height'],
+     '#uri' => $variables['element']['#uri'],
+     '#attributes' => [
+       'alt' => 'jcrop-preview',
+        'class' => array('preview-existing', 'jcrop-preview'),
+        // 'style' => 'display:none',
+      ],
+    ];
+    // print_r($variables['element']);
+    $variables['height'] = $variables['element']['#height'];
+    $variables['width'] = $variables['element']['#width'];
+    $variables["preview_image"] = $image;
+}

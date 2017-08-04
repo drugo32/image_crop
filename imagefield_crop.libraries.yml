@@ -1,0 +1,9 @@
+cropimage:
+  version: 1.x
+  js:
+    imagefield_crop.js: {}
+    Jcrop/js/jquery.Jcrop.js: {}
+    Jcrop/js/jquery.color.js: {}
+  css:
+    base:
+      Jcrop/css/jquery.Jcrop.css: {}
