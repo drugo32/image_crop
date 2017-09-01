@@ -7,6 +7,7 @@
 //namespace Drupal\image\Plugin\Field\FieldWidget;
 namespace Drupal\imagefield_crop\Plugin\Field\FieldWidget;
 
+use Drupal;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Component\Utility\NestedArray;
 use Drupal\Core\Form\FormStateInterface;
@@ -45,6 +46,15 @@ class ImageCropWidget extends ImageWidget {
   }
 
   /**
+     * {@inheritdoc} (Settings memorizza campo)
+     */
+    public function storageSettingsForm(array &$form, FormStateInterface $form_state, $has_data) {
+      $element = [];
+      $element += parent::storageSettingsForm($form, $form_state, $has_data);
+      return $element;
+    }
+
+  /**
    * {@inheritdoc}
    */
   public function settingsForm(array $form, FormStateInterface $form_state) {
@@ -65,10 +75,13 @@ class ImageCropWidget extends ImageWidget {
 
     $element['resolution'] = array(
       '#title' => t('The resolution to crop the image onto'),
+/*
       '#element_validate' => array(
         '_image_field_resolution_validate',
         '_imagefield_crop_widget_resolution_validate'
       ),
+*/
+      '#element_validate' => [[get_class($this), 'validateRresolution']],
       '#theme_wrappers' => array('form_element'),
       '#description' => t('The output resolution of the cropped image, expressed as WIDTHxHEIGHT (e.g. 640x480). Set to 0 not to rescale after cropping. Note: output resolution must be defined in order to present a dynamic preview.'),
     );
@@ -109,6 +122,7 @@ class ImageCropWidget extends ImageWidget {
       '#element_validate' => array('_imagefield_crop_widget_croparea_validate'),
       '#theme_wrappers' => array('form_element'),
       '#description' => t('The resolution of the area used for the cropping of the image. Image will displayed at this resolution for cropping. Use WIDTHxHEIGHT format, empty or zero values are permitted, e.g. 500x will limit crop box to 500 pixels width.'),
+      '#element_validate' => [[get_class($this), 'validateCropArea']],
     );
     $element['croparea']['x'] = array(
       '#type' => 'textfield',
@@ -130,6 +144,20 @@ class ImageCropWidget extends ImageWidget {
     return $element;
   }
 
+
+  /**
+     * Element validate function for resolution fields.
+     */
+     public static function validateRresolution($element, FormStateInterface $form_state) {
+      // $form_state->setError($element['x'],t('Both a height and wid'));
+      $form_state->setValueForElement($element, $element['x']['#value'] . 'x' . $element['y']['#value']);
+    }
+    /**
+       * Element validate function for Crop Area fields.
+       */
+      public static function validateCropArea($element, FormStateInterface $form_state) {
+        $form_state->setValueForElement($element, $element['x']['#value'] . 'x' . $element['y']['#value']);
+      }
   /**
    * {@inheritdoc}
    */
@@ -148,8 +176,19 @@ class ImageCropWidget extends ImageWidget {
    */
   public static function process($element, FormStateInterface $form_state, $form) {
     $element =  parent::process($element, $form_state, $form);
-    //  print_r(FieldConfig::loadByName($element['#entity_type'], $element['#field_name'],  $element['#bundle'])); exit;
-    //   print_r( Field::fieldInfo()->getBundleInstance($element['#entity_type'], $element['#field_name'],  $element['#bundle'])); exit;
+  //  dpm($this->getFieldSettings());
+   //print_r(FieldConfig::loadByName($element['#entity_type'], $element['#field_name'],  $element['#bundle'])); exit;
+   dpm($element['#entity_type']);
+
+   dpm($element['#bundle']);
+  //  dpm( Drupal::EntityManager::getFieldDefinitions($element['#entity_type'], 'article'));
+   $settings = Drupal::entityTypeManager()->getStorage('entity_form_display')->load($element['#entity_type'] . '.article.' . 'default');
+  //  if(!empty($settings)) {
+   $field_store_settings = $settings->getComponent($element['#field_name']);
+$field_store_settings = $field_store_settings['settings'];
+  //  }
+   // dpm(FieldConfig::loadByName($element['#entity_type'], 'article',  $element['#field_name']));
+    // exit;
     $item = $element['#value'];
     $item['fids'] = $element['fids']['#value'];
 
@@ -165,8 +204,9 @@ class ImageCropWidget extends ImageWidget {
     // $element['#attached']['css'][] = "$path/Jcrop/css/jquery.Jcrop.css";
 
 
-
-
+    $field_store_settings['resolution'] = "100x100";
+    $field_store_settings['croparea'] = "400x400";
+      dpm( $field_store_settings);
     // Add the image preview.
     if (!empty($element['#files']) && $element['#preview_image_style']) {
 
@@ -198,12 +238,12 @@ class ImageCropWidget extends ImageWidget {
         '#theme' => 'imagefield_crop_widget',
         '#weight' => -10,
       ];
-
+  list($rwidth, $rheight) = explode('x', $field_store_settings["resolution"]);
       $element['imagecrop']['#preview'] = array(
         '#weight' => -10,
         '#theme' => 'imagefield_crop_preview',
-        '#width' => $variables['width'],
-        '#height' => $variables['height'],
+        '#width' => $rwidth,
+        '#height' => $rheight,
         '#uri' => $variables['uri'],
         '#attributes' => [
           'class' => array('preview-existing', 'jcrop-preview'),
@@ -230,21 +270,41 @@ class ImageCropWidget extends ImageWidget {
             'id' => $element['#id'] . '-cropbox'))),
         */
       );
+
+    //  $image = \Drupal::service('image.factory')->get($file->getFileUri());
+    //  if ($image->isValid()) {
+        //list($width, $height) = explode('x', $element["#resolution"]);
+        //list($res_w, $res_h) = explode('x',  $element['#resolution']);
+        //list($crop_w, $crop_h) = explode('x', $element['#croparea']);
+        //$force_ratio = $element['#enforce_ratio'];
+        //$force_minimum =  $element['#enforce_minimum'];
+
+
+
+      $preview_js = array(
+      'orig_width' => $image->getWidth(),
+      'orig_height' => $image->getHeight(),
+      'width' => $rwidth,
+      'height' => $rheight,
+      );
+
+
       $element['cropinfo'] = self::imagefield_add_cropinfo_fields($element['#file']->fid);
-      list($res_w, $res_h) = explode('x', $element['resolution']);
-      list($crop_w, $crop_h) = explode('x', $element['croparea']);
+      list($res_w, $res_h) = explode('x', $field_store_settings['resolution']);
+      list($crop_w, $crop_h) = explode('x', $field_store_settings['croparea']);
+
       $settings = array(
         "test" => array(
           'box' => array(
-            'ratio' => $res_h ? $element['enforce_ratio'] * $res_w/$res_h : 0,
+            'ratio' => $res_h ? $field_store_settings['enforce_ratio'] * $res_w/$res_h : 0,
             'box_width' => $crop_w,
             'box_height' => $crop_h,
           ),
           'minimum' => array(
-            'width'   => $element['enforce_minimum'] ? $res_w : NULL,
-            'height'  => $element['enforce_minimum'] ? $res_h : NULL,
+            'width'   => $field_store_settings['enforce_minimum'] ? $res_w : NULL,
+            'height'  => $field_store_settings['enforce_minimum'] ? $res_h : NULL,
           ),
-          //'preview' => $preview_js,
+          'preview' => $preview_js,
         ),
       );
       $element['#attached'] = array(
