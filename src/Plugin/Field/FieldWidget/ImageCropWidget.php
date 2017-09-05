@@ -59,7 +59,6 @@ class ImageCropWidget extends ImageWidget {
    */
   public function settingsForm(array $form, FormStateInterface $form_state) {
     $element = parent::settingsForm($form, $form_state);
-
     $element['collapsible'] = array(
       '#type' => 'radios',
       '#title' => t('Collapsible behavior'),
@@ -71,8 +70,7 @@ class ImageCropWidget extends ImageWidget {
       '#default_value' => $this->getSetting('collapsible'),
     );
     // Resolution settings.
-    $resolution = $this->getSetting('resolution')  ;
-
+    $resolution = explode('x', $this->getSetting('resolution')) + array('', '');
     $element['resolution'] = array(
       '#title' => t('The resolution to crop the image onto'),
 /*
@@ -87,7 +85,7 @@ class ImageCropWidget extends ImageWidget {
     );
     $element['resolution']['x'] = array(
       '#type' => 'textfield',
-      '#default_value' => isset($resolution['x']) ? $resolution['x'] : '',
+      '#default_value' => isset($resolution[0]) ? $resolution[0] : '',
       '#size' => 5,
       '#maxlength' => 5,
       '#field_suffix' => ' x ',
@@ -95,7 +93,7 @@ class ImageCropWidget extends ImageWidget {
     );
     $element['resolution']['y'] = array(
       '#type' => 'textfield',
-      '#default_value' => isset($resolution['y']) ? $resolution['y'] : '',
+      '#default_value' => isset($resolution[1]) ? $resolution[1] : '',
       '#size' => 5,
       '#maxlength' => 5,
       '#field_suffix' => ' ' . t('pixels'),
@@ -116,17 +114,20 @@ class ImageCropWidget extends ImageWidget {
       '#element_validate' => array('_imagefield_crop_widget_enforce_minimum_validate'),
     );
     // Crop area settings
-    $croparea = $this->getSetting('croparea') ;
+    // $croparea = $this->getSetting('croparea') ;
+
+    $croparea = explode('x', $this->getSetting('croparea')) + array('', '');
+
     $element['croparea'] = array(
       '#title' => t('The resolution of the cropping area'),
-      '#element_validate' => array('_imagefield_crop_widget_croparea_validate'),
+      // '#element_validate' => array('_imagefield_crop_widget_croparea_validate'),
       '#theme_wrappers' => array('form_element'),
       '#description' => t('The resolution of the area used for the cropping of the image. Image will displayed at this resolution for cropping. Use WIDTHxHEIGHT format, empty or zero values are permitted, e.g. 500x will limit crop box to 500 pixels width.'),
       '#element_validate' => [[get_class($this), 'validateCropArea']],
     );
     $element['croparea']['x'] = array(
       '#type' => 'textfield',
-      '#default_value' => isset($croparea['x']) ? $croparea['x'] : '',
+      '#default_value' => isset($croparea[0]) ? $croparea[0] : '',
       '#size' => 5,
       '#maxlength' => 5,
       '#field_suffix' => ' x ',
@@ -134,7 +135,7 @@ class ImageCropWidget extends ImageWidget {
     );
     $element['croparea']['y'] = array(
       '#type' => 'textfield',
-      '#default_value' => isset($croparea['y']) ? $croparea['y'] : '',
+      '#default_value' => isset($croparea[1]) ? $croparea[1] : '',
       '#size' => 5,
       '#maxlength' => 5,
       '#field_suffix' => ' ' . t('pixels'),
@@ -163,7 +164,16 @@ class ImageCropWidget extends ImageWidget {
    */
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
     $element = parent::formElement($items, $delta, $element, $form, $form_state);
+    dpm(array_keys($element));
+    dpm($element['#required']);
 
+    // Add properties needed by process() method.
+    $settings = self::defaultSettings();
+    foreach(array_keys($settings) as $key) {
+      if(!isset($element['#' . $key])) {
+        $element['#' . $key] = $this->getSetting($key);
+      }
+    }
     return $element;
   }
 
@@ -176,41 +186,18 @@ class ImageCropWidget extends ImageWidget {
    */
   public static function process($element, FormStateInterface $form_state, $form) {
     $element =  parent::process($element, $form_state, $form);
-  //  dpm($this->getFieldSettings());
-   //print_r(FieldConfig::loadByName($element['#entity_type'], $element['#field_name'],  $element['#bundle'])); exit;
-   dpm($element['#entity_type']);
-
-   dpm($element['#bundle']);
-  //  dpm( Drupal::EntityManager::getFieldDefinitions($element['#entity_type'], 'article'));
-   $settings = Drupal::entityTypeManager()->getStorage('entity_form_display')->load($element['#entity_type'] . '.article.' . 'default');
-  //  if(!empty($settings)) {
-   $field_store_settings = $settings->getComponent($element['#field_name']);
-$field_store_settings = $field_store_settings['settings'];
-  //  }
-   // dpm(FieldConfig::loadByName($element['#entity_type'], 'article',  $element['#field_name']));
-    // exit;
-    $item = $element['#value'];
-    $item['fids'] = $element['fids']['#value'];
-
-    //  $element['#theme'] = 'imagefield_crop_widget';
-
+    if(isset($element['preview'])) { unset($element['preview']); }
     $element['#description'] = t('Click on the image and drag to mark how the image will be cropped');
-
     $path = drupal_get_path('module', 'imagefield_crop');
+
     // $element['#attached']['js'][] = "$path/Jcrop/js/jquery.Jcrop.js";
     // We must define Drupal.behaviors for ahah to work, even if there is no file
     //  $element['#attached']['js'][] = "$path/imagefield_crop.js";
     //
     // $element['#attached']['css'][] = "$path/Jcrop/css/jquery.Jcrop.css";
-
-
-    $field_store_settings['resolution'] = "100x100";
-    $field_store_settings['croparea'] = "400x400";
-      dpm( $field_store_settings);
     // Add the image preview.
     if (!empty($element['#files']) && $element['#preview_image_style']) {
 
-      dpm("okkoko");
       $file = reset($element['#files']);
       $variables = array(
         'style_name' => $element['#preview_image_style'],
@@ -233,12 +220,15 @@ $field_store_settings = $field_store_settings['settings'];
         }
       }
 
+      list($rwidth, $rheight) = explode('x', $element['#resolution']);
+      list($crop_w, $crop_h) = explode('x', $element['#croparea']);
+
       $element['imagecrop'] = [
         '#type' => 'item',
         '#theme' => 'imagefield_crop_widget',
         '#weight' => -10,
       ];
-  list($rwidth, $rheight) = explode('x', $field_store_settings["resolution"]);
+
       $element['imagecrop']['#preview'] = array(
         '#weight' => -10,
         '#theme' => 'imagefield_crop_preview',
@@ -252,61 +242,38 @@ $field_store_settings = $field_store_settings['settings'];
       );
 
       $element['imagecrop']['#cropbox'] = array(
-          '#theme' => 'image',
-            // '#width' => $image->getWidth(),
-            //'#height' => $image->getHeight(),
-            // '#style_name' => $variables['style_name'],
-            // '#element_validate' => array(get_called_class(), 'validate'),
-            '#attributes' => array(
-              'class' => 'cropbox',
-              'id' => $element['#id'] . '-cropbox',
-            ),
-            '#uri' => $variables['uri'],
-        /*
-        '#markup' => theme('image', array(
-          'path' => $variables->uri,
-          'attributes' => array(
-            'class' => 'cropbox',
-            'id' => $element['#id'] . '-cropbox'))),
-        */
+        '#theme' => 'image',
+        '#attributes' => array(
+          'class' => 'cropbox',
+          'id' => $element['#id'] . '-cropbox',
+        ),
+        '#uri' => $variables['uri'],
       );
-
-    //  $image = \Drupal::service('image.factory')->get($file->getFileUri());
-    //  if ($image->isValid()) {
-        //list($width, $height) = explode('x', $element["#resolution"]);
-        //list($res_w, $res_h) = explode('x',  $element['#resolution']);
-        //list($crop_w, $crop_h) = explode('x', $element['#croparea']);
-        //$force_ratio = $element['#enforce_ratio'];
-        //$force_minimum =  $element['#enforce_minimum'];
-
-
-
-      $preview_js = array(
-      'orig_width' => $image->getWidth(),
-      'orig_height' => $image->getHeight(),
-      'width' => $rwidth,
-      'height' => $rheight,
-      );
-
 
       $element['cropinfo'] = self::imagefield_add_cropinfo_fields($element['#file']->fid);
-      list($res_w, $res_h) = explode('x', $field_store_settings['resolution']);
-      list($crop_w, $crop_h) = explode('x', $field_store_settings['croparea']);
+
+      $preview_js = array(
+        'orig_width' => $image->getWidth(),
+        'orig_height' => $image->getHeight(),
+        'width' => $rwidth,
+        'height' => $rheight,
+      );
 
       $settings = array(
         "test" => array(
           'box' => array(
-            'ratio' => $res_h ? $field_store_settings['enforce_ratio'] * $res_w/$res_h : 0,
+            'ratio' => $rheight ? $element['#enforce_ratio'] * ($rwidth/$rheight) : 0,
             'box_width' => $crop_w,
             'box_height' => $crop_h,
           ),
           'minimum' => array(
-            'width'   => $field_store_settings['enforce_minimum'] ? $res_w : NULL,
-            'height'  => $field_store_settings['enforce_minimum'] ? $res_h : NULL,
+            'width'   => $element['#enforce_minimum'] ? $res_w : NULL,
+            'height'  => $element['#enforce_minimum'] ? $res_h : NULL,
           ),
           'preview' => $preview_js,
         ),
       );
+
       $element['#attached'] = array(
         'library' => array(
           'imagefield_crop/cropimage',
@@ -338,6 +305,7 @@ $field_store_settings = $field_store_settings['settings'];
    * avoid being validated on the process callback.
    */
   public static function validateRequiredFields($element, FormStateInterface $form_state) {
+
     // Only do validation if the function is triggered from other places than
     // the image process form.
     if (!in_array('file_managed_file_submit', $form_state->getTriggeringElement()['#submit'])) {
