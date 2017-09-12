@@ -45,13 +45,15 @@ Drupal.behaviors.imagefield_crop = {
 
         $(this).Jcrop({
           onChange: function(c) {
+            console.log("change");
             //$('.preview-existing', widget).css({display: 'none'});
             var preview = $('.imagefield-crop-preview');
             // skip newly added blank fields
             //if (undefined == settings.imagefield_crop[id].preview) {
             //  return;
             //}
-            console.log("change");
+            // console.log("change");
+          //  alert($(".edit-image-crop-x").val());
             var rx = drupalSettings.imagecrop_field['test'].preview.width / c.w;
             var ry = drupalSettings.imagecrop_field['test'].preview.height / c.h;
             $('.jcrop-preview').css({
@@ -73,6 +75,7 @@ Drupal.behaviors.imagefield_crop = {
 
           },
           onSelect: function(c) {
+            console.log("select");
             console.log( widget);
             console.log($(".edit-image-crop-x", widget));
             // , widget

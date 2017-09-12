@@ -1,0 +1,35 @@
+# @see Configuration schema/metadata at https://drupal.org/node/1905070
+#
+field.widget.settings.image_image_crop:
+  type: mapping
+  label: 'WIDGET NAME widget settings'
+  mapping:
+    size:
+      type: integer
+      label: 'Size'
+
+field.imagecrop_field.values:
+  type: config_object
+  mapping:
+    messages:
+      type: sequence
+      label: 'field settings'
+    sequence:
+        type: imagecrop_field_value.[%key]
+
+imagecrop_field_value.*:
+  type: config_object
+  label: 'files'
+  mapping:
+    y:
+      type: integer
+      label: "y pos"
+    x:
+      type: integer
+      label: "x pos"
+    width:
+      type: integer
+      label: "width"
+    height:
+      type: integer
+      label: "height"

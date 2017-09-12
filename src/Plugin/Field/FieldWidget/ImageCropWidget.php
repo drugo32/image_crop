@@ -42,6 +42,7 @@ class ImageCropWidget extends ImageWidget {
       'enforce_ratio' => TRUE,
       'enforce_minimum' => TRUE,
       'croparea' => '500x500',
+      'size' => 60,
     ) + parent::defaultSettings();
   }
 
@@ -59,6 +60,7 @@ class ImageCropWidget extends ImageWidget {
    */
   public function settingsForm(array $form, FormStateInterface $form_state) {
     $element = parent::settingsForm($form, $form_state);
+
     $element['collapsible'] = array(
       '#type' => 'radios',
       '#title' => t('Collapsible behavior'),
@@ -151,31 +153,55 @@ class ImageCropWidget extends ImageWidget {
      */
      public static function validateRresolution($element, FormStateInterface $form_state) {
       // $form_state->setError($element['x'],t('Both a height and wid'));
+
+      dpm("validateResolution");
+
       $form_state->setValueForElement($element, $element['x']['#value'] . 'x' . $element['y']['#value']);
     }
     /**
-       * Element validate function for Crop Area fields.
-       */
-      public static function validateCropArea($element, FormStateInterface $form_state) {
+      * Element validate function for Crop Area fields.
+      */
+    public static function validateCropArea($element, FormStateInterface $form_state) {
+        dpm("validateCrop area");
         $form_state->setValueForElement($element, $element['x']['#value'] . 'x' . $element['y']['#value']);
-      }
+    }
   /**
    * {@inheritdoc}
    */
   public function formElement(FieldItemListInterface $items, $delta, array $element, array &$form, FormStateInterface $form_state) {
     $element = parent::formElement($items, $delta, $element, $form, $form_state);
-    dpm(array_keys($element));
-    dpm($element['#required']);
-
     // Add properties needed by process() method.
+
+//    if(isset($defaults[$file->id()])) {
+
+        // \Drupal::configFactory()->getEditable('field.imagecrop_field.values')->delete()->save();
+        // $a = $defaults  = \Drupal::config('field.imagecrop_field.values')->get(1);
+        // dpm()
+        //->set($defaults)
+        //->save();
+  //  }
+
+    //$test = \Drupal::config('field.storage.node.field_cropx');
+    //dpm($test);
+
     $settings = self::defaultSettings();
     foreach(array_keys($settings) as $key) {
       if(!isset($element['#' . $key])) {
         $element['#' . $key] = $this->getSetting($key);
       }
     }
+    //$element['#element_validate'] = [[get_class($this), 'validateCropInfo']];
+
+    //$element["#value_callback"][] = [[get_class($this), 'FieldCropvalue']];
+
+    //dpm($element);
+    // $element['#file_value_callbacks'][] = [[get_class($this), 'validateCropInfo']];
+
     return $element;
   }
+
+
+
 
   /**
    * Form API callback: Processes a image_image field element.
@@ -186,6 +212,7 @@ class ImageCropWidget extends ImageWidget {
    */
   public static function process($element, FormStateInterface $form_state, $form) {
     $element =  parent::process($element, $form_state, $form);
+
     if(isset($element['preview'])) { unset($element['preview']); }
     $element['#description'] = t('Click on the image and drag to mark how the image will be cropped');
     $path = drupal_get_path('module', 'imagefield_crop');
@@ -250,11 +277,18 @@ class ImageCropWidget extends ImageWidget {
         '#uri' => $variables['uri'],
       );
 
-      $element['cropinfo'] = self::imagefield_add_cropinfo_fields($element['#file']->fid);
+      $fids = array_keys($element['#files']);
+      $defaults  = \Drupal::config('field.imagecrop_field.values')->get($fids[0]);
+      if(isset($defaults) && !empty($defaults)) {
+        $element['cropinfo'] = self::imagefield_add_cropinfo_fields($fids[0]);
+      }
+      else {
+        $element['cropinfo'] = self::imagefield_add_cropinfo_fields();
+      }
 
       $preview_js = array(
-        'orig_width' => $image->getWidth(),
-        'orig_height' => $image->getHeight(),
+        'orig_width' =>   $variables['width'],//$image->getWidth(),
+        'orig_height' =>   $variables['height'],//$image->getHeight(),
         'width' => $rwidth,
         'height' => $rheight,
       );
@@ -281,51 +315,72 @@ class ImageCropWidget extends ImageWidget {
         'drupalSettings' => array('imagecrop_field' => $settings),
       );
 
-      /*
-      $element['#attached']['js'][] = array(
-        'data' => array('imagefield_crop' => $settings),
-        'type' => 'setting',
-        'scope' => 'header',
-      );
-      */
-
     }
 
-    // prepend submit handler to remove button
-   // array_unshift($element['remove_button']['#submit'], 'imagefield_crop_widget_delete');
+
+    //  $element['remove_button']['#submit'][] = [get_called_class(), 'imagefield_crop_widget_delete'];
+
+    //  dpm($element['remove_button']);
+    //  array_unshift($element['remove_button']['#submit'], 'imagefield_crop_widget_delete');
 
     return $element;
     // return
   }
+  /*
+  public function validate($element, FormStateInterface $form_state) {
 
-  /**
-   * Validate callback for alt and title field, if the user wants them required.
-   *
-   * This is separated in a validate function instead of a #required flag to
-   * avoid being validated on the process callback.
-   */
-  public static function validateRequiredFields($element, FormStateInterface $form_state) {
 
-    // Only do validation if the function is triggered from other places than
-    // the image process form.
-    if (!in_array('file_managed_file_submit', $form_state->getTriggeringElement()['#submit'])) {
-      // If the image is not there, we do not check for empty values.
-      $parents = $element['#parents'];
-      $field = array_pop($parents);
-      $image_field = NestedArray::getValue($form_state->getUserInput(), $parents);
-      // We check for the array key, so that it can be NULL (like if the user
-      // submits the form without using the "upload" button).
-      if (!array_key_exists($field, $image_field)) {
-        return;
-      } // Check if field is left empty.
-      elseif (empty($image_field[$field])) {
-        $form_state->setError($element, t('The field !title is required', array('!title' => $element['#title'])));
-        return;
-      }
-    }
   }
+*/
+public static function imagefield_crop_widget_delete($form, FormStateInterface $form_state) {
+    // During the form rebuild, formElement() will create field item widget
+    // elements using re-indexed deltas, so clear out FormState::$input to
+    // avoid a mismatch between old and new deltas. The rebuilt elements will
+    // have #default_value set appropriately for the current state of the field,
+    // so nothing is lost in doing this.
+    /*
+    $button = $form_state->getTriggeringElement();
+    //dpm($form_state['input']);
+    $parents = array_slice($button['#parents'], 0, -2);
+    //  dpm($parents)
+    $element = NestedArray::getValue($form, array_slice($button['#array_parents'], 0, -1));
+    dpm($element->getValues());
+    $submitted_values = NestedArray::getValue($form_state->getValues(), array_slice($button['#parents'], 0, -2));
+    dpm($submitted_values);
+    // dpm($element);
+    //  dpm($form_state['values']);
+    dpm($parents);
+    dpm($parents);
+    //dpm(  $button );
+    dpm("delete");
+    */
+}
+
+/**
+  * Element validate function for Crop Area fields.
+  */
+public static function validateCropInfo($element, FormStateInterface $form_state) {
+    dpm("validateCrop Info");
+  /*  //dpm($form_s)
+    dpm($element["#title"]);
+    dpm($element["#name"]);
+    dpm($element["#parents"][0]);
+    dpm($form_state->isSubmitted());
+
+    $val = $form_state->getValue($element["#parents"][0]);
+    dpm($val[0]['fids']);
+    // => field_cropx[0][cropinfo][x]);
+  fids
+    dpm($form_state->getValues());
+    dpm($form_state->getValue("nid"));
+
+    // [#title] => x
+    //  $form_state->setValueForElement($element, $element['x']['#value'] . 'x' . $element['y']['#value']);
+    */
+}
 
   public static function imagefield_add_cropinfo_fields($fid = NULL) {
+
     $defaults = array(
       'x'       => 0,
       'y'       => 0,
@@ -334,12 +389,10 @@ class ImageCropWidget extends ImageWidget {
       'changed' => 0,
     );
     if ($fid) {
-      $crop_info = variable_get('imagefield_crop_info', array());
-      if (isset($crop_info[$fid]) && !empty($crop_info[$fid])) {
-        $defaults = array_merge($defaults, $crop_info[$fid]);
-      }
+      $defaults  = \Drupal::config('field.imagecrop_field.values')->get($fid);
+      $defaults['changed'] = 0;
     }
-
+    // dpm($defaults);
     foreach ($defaults as $name => $default) {
       $element[$name] = array(
         '#type' => 'textfield',
@@ -349,6 +402,41 @@ class ImageCropWidget extends ImageWidget {
       );
     }
     return $element;
+  }
+
+  /**
+   * Gets the entity manager.
+   *
+   * @return \Drupal\Core\Entity\EntityManagerInterface
+   */
+  protected function getEntityManager() {
+    if (!isset($this->entityManager)) {
+      $this->entityManager = \Drupal::entityManager();
+    }
+    return $this->entityManager;
+  }
+
+  public static function value($element, $input, FormStateInterface $form_state) {
+    $return = parent::value($element, $input, $form_state);
+    /*
+    // save widget info vars.
+    if(isset($input['fids']) && !empty($input['fids']) ) {
+      $info_titems = Array('x', 'y', 'width', 'height');
+      $fid = (is_array($input['fids'])) ? $input['fids'][0] : $input['fids'];
+      $values = array();
+      foreach($info_titems as $name) {
+        $values[$name] = (int) $input['cropinfo'][$name];
+      }
+      \Drupal::configFactory()->getEditable('field.imagecrop_field.values')
+           ->set($fid, $values)
+           ->save();
+    }
+    */
+    return $return;
+  }
+
+  public static function submit($form, FormStateInterface $form_state) {
+
   }
 
 }

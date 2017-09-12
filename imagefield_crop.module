@@ -76,3 +76,142 @@
     $variables['width'] = $variables['element']['#width'];
     $variables["preview_image"] = $image;
 }
+
+
+
+function _imagefield_crop_file_to_crop($fid) {
+  $query = \Drupal::database()->select('file_usage', 'fu');
+  $query->fields('fu', ['fid']);
+  $query->condition('fu.id', $fid);
+  $query->condition('fu.module', 'imagefield_crop');
+  $query->range(0, 1);
+  $result = $query->execute()->fetchAssoc();
+  if (!empty($result) && isset($result['fid'])) {
+    $fid = $result['fid'];
+  }
+  return file_load($fid);
+}
+
+function _field_example_filecrop_add($value) {
+  // dpm($value);
+  $src = file_load($value['target_id']);
+  if(!$src) {
+    return ;
+  }
+  $file_usage = \Drupal::service('file.usage');
+  $orig_uri = file_unmanaged_copy($src->uri->value, $src->uri->value);
+
+  // $orig = file_load($fid);
+  $orig = clone $src;
+  $orig->fid = 0;
+  $orig->uri = $orig_uri;
+  $orig->filename = basename($orig_uri);
+  $orig->status = 1;
+
+  $data = file_get_contents($orig_uri);
+  $file = file_save_data($data, $orig_uri, FILE_EXISTS_REPLACE);
+  $file_usage->add($file, 'imagefield_crop', 'file', $src->id());
+
+  // crop image
+  /*
+    $field_value  = \Drupal::config('field.imagecrop_field.values')->get($src->id());
+    dpm($field_value)
+  */
+  // value['cropinfo']
+  $image = \Drupal::service('image.factory')->get($orig_uri);
+  $image->crop((int) $value['cropinfo']["x"], (int) $value['cropinfo']["y"], (int) $value['cropinfo']["width"], (int) $value['cropinfo']["height"]);
+  $image->save();
+
+  // Set value.
+  $info_titems = Array('x', 'y', 'width', 'height');
+  $fid = $value['target_id'];
+  $vset = array();
+  foreach($info_titems as $name) {
+    $vset[$name] = (int) $value['cropinfo'][$name];
+  }
+  \Drupal::configFactory()->getEditable('field.imagecrop_field.values')
+    ->set($value['target_id'], $vset)
+    ->save();
+  //}
+  //  dpm($value);
+}
+
+function _field_example_filecrop_remove($value) {
+  $file = _imagefield_crop_file_to_crop($value["target_id"]);
+  \Drupal::service('file.usage')->delete($file, 'imagefield_crop', 'file', $value["target_id"]);
+  file_delete($file->id());
+
+  // remove variable_set
+  $defaults  = \Drupal::config('field.imagecrop_field.values')->get();
+  if(isset($defaults[$file->id()])) {
+    unset($defaults[$file->id()]);
+    \Drupal::configFactory()->getEditable('field.imagecrop_field.values')->setData($defaults)->save();
+  }
+
+}
+
+// -1 void()0
+// 0 rimove quello vecchio
+// 1 field upadte whit new file
+function _field_update($new,$old) {
+  if(!empty($new) && !empty($old)) {
+    if(isset($new["target_id"]) && isset($old["target_id"])) {
+      if($new["target_id"] == $old["target_id"]) {
+        return -1;
+      }
+      else {
+        return 1;
+      }
+    }
+  }
+  else if(empty($new) && !empty($old)) {
+    if(isset($old["target_id"])) {
+      return 0;
+    }
+  }
+  return -1;
+}
+
+
+function imagefield_crop_entity_update($entity) {
+  // is fildable.
+  if(!is_a($entity, 'Drupal\file\Entity\File')) {
+    if(method_exists($entity, 'getFields')) {
+      $field = $entity->getFields();
+      foreach ($field as $key => $value) {
+        // dpm($value->getFieldDefinition()->getType());
+        // dpm($value->getFieldDefinition()->getBandle());
+        if($value->getFieldDefinition()->getType() == "image") {
+          $entity_type = $entity->getEntityType()->id();
+          $entity_bundle = $entity->bundle();
+          $field_name = $value->getName();
+          $field_widget_type = entity_get_form_display($entity_type, $entity_bundle, 'default')
+          ->getComponent($field_name)['type'];
+          //$field_widget_type = "suca";
+          // dpm($field_widget_type);
+
+          if($field_widget_type === "image_image_crop") {
+            $origin = $entity->original;
+            $fileds_old = $origin->get($field_name)->getValue();
+            $fileds_update = $entity->get($field_name)->getValue();
+            $update_check = array_map("_field_update", $fileds_update ,$fileds_old);
+
+            foreach($update_check as $i => $value) {
+              if ($value == 0) {
+                // dpm($fileds_old[$i]);
+                _field_example_filecrop_remove($fileds_old[$i]);
+              }
+              else if ($value == 1) {
+                // dpm("update and remove");
+                // dpm($fileds_update[$i]);
+                _field_example_filecrop_remove($fileds_old[$i]);
+                _field_example_filecrop_add($fileds_update[$i]);
+              }
+              // regenerate image.
+            }
+          }
+        }
+      }
+    }
+  }
+}
